@@ -1,0 +1,42 @@
+# Take a snapshot of AMI volumes if they have the tag
+#
+# Possible filters can be found at the following link:
+# http://docs.aws.amazon.com/AWSEC2/latest/APIReference/API_DescribeInstances.html
+#
+# For this to work, you must tag your AMI with "Snapshot : 1"
+#
+# This uses a custom ec2_remote_facts.py module as well which is in this repo..
+
+- name: Fact Gathering
+  hosts: localhost
+  vars_files:
+  - vault_aws_creds.yml
+#  gather_facts: False
+  tasks:
+  - ec2_remote_facts:
+      region: us-east-1
+      aws_access_key: "{{ aws_access_key_id }}"
+      aws_secret_key: "{{ aws_secret_access_key }}"
+      filters:
+        "tag:Snapshot": 1
+    delegate_to: localhost
+    register: snapshot_instances
+
+  - name: Print Facts
+    debug:
+      msg: "{{ snapshot_instances }}"
+
+  - name: Snapshot Volume
+    ec2_snapshot:
+      aws_access_key: "{{ aws_access_key_id }}"
+      aws_secret_key: "{{ aws_secret_access_key }}"
+      region: us-east-1
+      instance_id: "{{ item.id }}"
+      device_name: "{{ item.root_device_name }}"
+      snapshot_tags:
+         # Name: "{{ item.tags.Name }}_{{ INCREMENTAL }}_{{ ansible_date_time.date }}"
+          Name: "{{ item.tags.Name }}"
+          identifier: awsbackup
+          instance: "{{ item.tags.Name }}"
+    delegate_to: localhost
+    with_items: "{{ snapshot_instances.instances }}"
